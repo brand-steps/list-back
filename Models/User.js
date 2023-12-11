@@ -1,58 +1,57 @@
 import mongoose from 'mongoose';
-const mongodbURI = process.env.mongodbURI || "mongodb+srv://shaikhahsanali0303:brandsteps1234@cluster0.fh825iv.mongodb.net/?retryWrites=true&w=majority";
+const mongodbURI = process.env.mongodbURI || "mongodb+srv://shaikhahsanali0303:brandstepcar123@cluster0.5rbqfne.mongodb.net/?retryWrites=true&w=majority";
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-const userSchema = new mongoose.Schema({
-  username: String,
-  email: String,
-  phone: String,
-  country: String,
-  password: String,
+const stockschema = new mongoose.Schema({
+  carname: String,
+  make: String,
+  model: String,
+  bodys: String,
+  milage: String,
+
+  year: String,
+  color: String,
+  fueltype: String,
+  gearbox: String,
+  door: String,
+  enginetype: String,
+  enginesize: String,
+  mpg: String,
+  height: String,
+  length: String,
+
+  width: String,
+  co2emission: String,
+  ledlight: String,
+  navigation: String,
+  coolingseats: String,
+  soundsystem: String,
+  airbags: String,
+  backcamera: String,
+  parkingcamera: String,
+  traction: String,
+
+  antilockbreaks: String,
+  aircondition: String,
+  climatecontrol: String,
+  sunroof: String,
+  price: String,
+  installment: String,
+  installmentmonths: String,
+  imageUrl1: { type: String},
+  imageUrl2: { type: String},
+  imageUrl3: { type: String},
+  imageUrl4: { type: String},
+  imageUrl5: { type: String},
+  imageUrl6: { type: String},
+
+  description: String,
+  sold: { type: Boolean, default: false },
   createdOn: { type: Date, default: Date.now },
 });
 
-const singlegroupSchema = new mongoose.Schema({
-    groupname: String,
-    email: String,
-    whatsapp: String,
-    experience: String,
-    totalclients: String,
-    paymentoption: String,
-    isApproved: { type: Boolean, default: false },
-    createdOn: { type: Date, default: Date.now },
-  });
-  export const signalModel = mongoose.model('signalgroup', singlegroupSchema);
 
-  const managerSchema = new mongoose.Schema({
-    groupname: String,
-    email: String,
-    whatsapp: String,
-    experience: String,
-    totalclients: String,
-    paymentoption: String,
-    isApproved: { type: Boolean, default: false },
-    createdOn: { type: Date, default: Date.now },
-  });
-
-  export const managerModel = mongoose.model('accountmanagers', managerSchema);
-
-  const mentorSchema = new mongoose.Schema({
-    mentorname: String,
-    email: String,
-    mentorfee: String,
-    socialmedia: String,
-    isApproved: { type: Boolean, default: false },
-    createdOn: { type: Date, default: Date.now },
-  });
-  export const mentorModel = mongoose.model('mentors', mentorSchema);
-
-const imageSchema = new mongoose.Schema({
-    imageUrl: { type: String  ,  required: true },
-    createdOn: { type: Date, default: Date.now },
-  });
-  export const imageModel = mongoose.model('ImageAll', imageSchema);
-
-const User = mongoose.model('User', userSchema);
+const Stocks = mongoose.model('Stocks', stockschema);
 mongoose.connect(mongodbURI);
 ////////////////mongodb connected disconnected events///////////////////////////////////////////////
 mongoose.connection.on('connected', function () {//connected
@@ -78,4 +77,4 @@ process.on('SIGINT', function () {/////this function will run jst before app is 
 });
 ////////////////mongodb connected disconnected events///////////////////////////////////////////////
 
-export default User;
+export default Stocks;
