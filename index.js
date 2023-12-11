@@ -280,7 +280,7 @@ app.get("/stocksdisplaytrue", async (req, res) => {
     res.status(500).send({
       message: "Server error",
     });
-  }
+  } 
 });
 app.get("/api/v1/paginatpost", async (req, res) => {
   try {
