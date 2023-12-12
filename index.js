@@ -282,6 +282,21 @@ app.get("/stocksdisplaytrue", async (req, res) => {
     });
   } 
 });
+app.get("/stocksdisplayall", async (req, res) => {
+  try {
+    const result1 = await Stocks.find().exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all Stocks successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  } 
+});
 app.get("/api/v1/paginatpost", async (req, res) => {
   try {
     let query = Stocks.find({sold : false});
