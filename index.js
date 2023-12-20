@@ -421,7 +421,9 @@ app.get("/api/search", async (req, res) => {
   if (req.query.make) {
     searchParams.make = new RegExp(req.query.make, "i");
   }
-
+  if (req.query.model) {
+    searchParams.make = new RegExp(req.query.model, "i");
+  }
   if (req.query.year) {
     searchParams.year = new RegExp(req.query.year, "i");
   }
