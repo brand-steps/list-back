@@ -13,7 +13,8 @@ import multer from "multer";
 import bucket from "./Bucket/Firebase.js";
 import fs from "fs";
 import path from "path";
-import Stocks from "./Models/User.js";
+import listers from "./Models/User.js";
+import { productmodel } from "./Models/User.js";
 
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: false }));
@@ -29,11 +30,212 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 app.use(express.json());
 app.get("/", (req, res) => {
-  res.send("Ahemd Raza ");
+  res.send("List it Application ");
 });
 
+app.post("/listerregister", async (req, res) => {
+  try {
+    const { firstname, lastname, email, phone ,postal,address,city,state, packagename, password } = req.body;
 
-app.post("/productrequesttest", upload.array('images', 6), (req, res) => {
+    // Check if user with the given email already exists
+    const existingCustomer = await listers.findOne({ email });
+
+    if (existingCustomer) {
+      return res.status(400).json({ error: "Email already exists" });
+    }
+
+    // Create a new user
+    const newCustomer = new listers({
+      firstname,
+      lastname,
+      email,
+      phone,
+      postal,
+      address,
+      city,
+      state,
+      packagename,
+      password,
+    });
+
+    // Save the user to the database
+    await newCustomer.save();
+
+    res.status(201).json({ message: "User registered successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+app.post("/listerlogin", async (req, res) => {
+  try {
+    let body = req.body;
+    body.email = body.email.toLowerCase();
+
+    if (!body.email || !body.password) {
+      res.status(400).send(`required fields missing, request example: ...`);
+      return;
+    }
+
+    // check if user exists
+    const data = await listers.findOne(
+      { email: body.email },
+      "username email password"
+    );
+
+    if (data && body.password === data.password) {
+      // user found
+      console.log("User Successfully Logged In !");
+      console.log("data: ", data);
+
+      const token = jwt.sign(
+        {
+          _id: data._id,
+          email: data.email,
+          iat: Math.floor(Date.now() / 1000) - 30,
+          exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
+        },
+        SECRET
+      );
+
+      console.log("token: ", token);
+
+      res.cookie("Token", token, {
+        maxAge: 86_400_000,
+        httpOnly: true,
+        sameSite: "none",
+        secure: true,
+      });
+
+      res.send({
+        message: "login successful",
+        profile: {
+          email: data.email,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          age: data.age,
+          _id: data._id,
+        },
+      });
+
+      return;
+    } else {
+      // user not found
+      console.log("user not found");
+      res.status(401).send({ message: "Incorrect email or password" });
+    }
+  } catch (error) {
+    console.log("error: ", error);
+    res.status(500).send({ message: "login failed, please try later" });
+  }
+});
+
+app.use("/api/v1", (req, res, next) => {
+  console.log("req.cookies: ", req.cookies.Token);
+
+  if (!req?.cookies?.Token) {
+    res.status(401).send({
+      message: "include http-only credentials with every request",
+    });
+    return;
+  }
+
+  jwt.verify(req.cookies.Token, SECRET, function (err, decodedData) {
+    if (!err) {
+      console.log("decodedData: ", decodedData);
+
+      const nowDate = new Date().getTime() / 1000;
+
+      if (decodedData.exp < nowDate) {
+        res.status(401);
+        res.cookie("Token", "", {
+          maxAge: 1,
+          httpOnly: true,
+          sameSite: "none",
+          secure: true,
+        });
+        res.send({ message: "token expired" });
+      } else {
+        console.log("token approved");
+
+        req.body.token = decodedData;
+        next();
+      }
+    } else {
+      res.status(401).send("invalid token");
+    }
+  });
+});
+
+app.get("/api/v1/listerprofile", (req, res) => {
+  const _id = req.body.token._id;
+  const getData = async () => {
+    try {
+      const user = await listers.findOne(
+        { _id: _id },
+        "email password firstname lastname phone _id"
+      ).exec();
+      if (!user) {
+        res.status(404).send({});
+        return;
+      } else {
+        res.set({
+          "Cache-Control":
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+          "Surrogate-Control": "no-store",
+        });
+        res.status(200).send(user);
+      }
+    } catch (error) {
+      console.log("error: ", error);
+      res.status(500).send({
+        message: "something went wrong on server",
+      });
+    }
+  };
+  getData();
+});
+
+app.get("/userdisplay", async (req, res) => {
+  try {
+    const result1 = await listers.find().exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all listers successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+app.delete("/deletelisteruser/:id", async (req, res) => {
+  const id = req.params.id;
+
+  try {
+    const deletedData = await listers.deleteOne({ _id: id });
+
+    if (deletedData.deletedCount !== 0) {
+      res.send({
+        message: "Lister profile has been deleted successfully",
+      });
+    } else {
+      res.status(404).send({
+        message: "No mentor found with this id: " + id,
+      });
+    }
+    console.log("id",id);
+  } catch (err) {
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+app.post("/addlist", upload.array('images', 6), (req, res) => {
   try {
     const body = req.body;
 
@@ -79,43 +281,27 @@ app.post("/productrequesttest", upload.array('images', 6), (req, res) => {
 
     Promise.all(uploadedFiles)
       .then(imageUrls => {
-        let addProduct = new Stocks({
+        let addProduct = new productmodel({
 
-          carname: body.carname,
-          make: body.make,
-          model: body.model,
-          bodys: body.bodys,
-          milage : body.milage,
-          description: body.description,
+          productname: body.productname,
+          category: body.category,
+          subcategory: body.subcategory,
+          gender: body.gender,
+          type : body.type,
+          condition: body.condition,
           
-          year: body.year,
-          color: body.color,
-          fueltype : body.fueltype,
-          gearbox: body.gearbox,
-          door: body.door,
-          enginetype: body.enginetype,
-          enginesize : body.enginesize,
-          mpg: body.mpg,
-          height: body.height,
-          length: body.length,
-          width : body.width,
-          co2emission: body.co2emission,
-          ledlight: body.ledlight,
-          navigation : body.navigation,
-          coolingseats: body.coolingseats,
-          soundsystem: body.soundsystem,
-          airbags: body.airbags,
-          backcamera : body.backcamera,
-          parkingcamera: body.parkingcamera,
-
-          traction: body.traction,
-          antilockbreaks: body.antilockbreaks,
-          aircondition : body.aircondition,
-          climatecontrol: body.climatecontrol,
-          sunroof: body.sunroof,
+          propertystate: body.propertystate,
+          areaunit: body.areaunit,
+          areasize : body.areasize,
+          career: body.career,
+          position: body.position,
+          whatsapp: body.whatsapp,
+          mobile : body.mobile,
+          location: body.location,
+          listername: body.listername,
+          listerid: body.listerid,
+          description: body.description,
           price: body.price,
-          installment : body.installment,
-          installmentmonths: body.installmentmonths,
          
           imageUrl1: imageUrls[0], // Save the first image URL
           imageUrl2: imageUrls[1], // Save the second image URL
@@ -148,116 +334,13 @@ app.post("/productrequesttest", upload.array('images', 6), (req, res) => {
   }
 });
 
-
-
-app.post("/productrequestnew", upload.any(), (req, res) => {
+// display list products
+app.get("/listdisplay", async (req, res) => {
   try {
-    const body = req.body;
-
-
-    console.log("req.body: ", req.body);
-    console.log("req.files: ", req.files);
-req.files.map((filee) => {
-  console.log("uploaded file name: ", filee.originalname);
-  console.log("uploaded file name: ", filee.originalname);
-  console.log("file type: ", filee.mimetype);
-  console.log("file name in server folders: ", filee.filename);
-  console.log("file path in server folders: ", filee.path);
-})
-
-
-    bucket.upload(
-
-      req.files[0].path,
-      {
-        destination: `tweetPictures/${req.files[0].filename}`, // give destination name if you want to give a certain name to file in bucket, include date to make name unique otherwise it will replace previous file with the same name
-      },
-      function (err, file, apiResponse) {
-        if (!err) {
-          file
-            .getSignedUrl({
-              action: "read",
-              expires: "03-09-2999",
-            })
-            .then((urlData, err) => {
-              if (!err) {
-                console.log("public downloadable url: ", urlData[0]); // this is public downloadable url
-
-                try {
-                  fs.unlinkSync(req.files[0].path);
-                  //file removed
-                } catch (err) {
-                  console.error(err);
-                }
-
-                let addPRoduct = new Stocks({
-                  carname: body.carname,
-                  make: body.make,
-                  model: body.model,
-                  bodys: body.bodys,
-                  milage : body.milage,
-                  imageUrl1: urlData[0],
-                  description: body.description,
-                  
-                  year: body.year,
-                  color: body.color,
-                  fueltype : body.fueltype,
-                  gearbox: body.gearbox,
-                  door: body.door,
-                  enginetype: body.enginetype,
-                  enginesize : body.enginesize,
-                  mpg: body.mpg,
-                  height: body.height,
-                  length: body.length,
-                  width : body.width,
-                  co2emission: body.co2emission,
-                  ledlight: body.ledlight,
-                  navigation : body.navigation,
-                  coolingseats: body.coolingseats,
-                  soundsystem: body.soundsystem,
-                  airbags: body.airbags,
-                  backcamera : body.backcamera,
-                  parkingcamera: body.parkingcamera,
-
-                  traction: body.traction,
-                  antilockbreaks: body.antilockbreaks,
-                  aircondition : body.aircondition,
-                  climatecontrol: body.climatecontrol,
-                  sunroof: body.sunroof,
-                  price: body.price,
-                  installment : body.installment,
-                  installmentmonths: body.installmentmonths,
-                 
-
-                });
-
-                addPRoduct.save().then((res) => {
-                  // res.send(res)
-
-                  console.log(res, "ProDUCT ADD");
-                });
-
-                
-              }
-            });
-        } else {
-          console.log("err: ", err);
-          res.status(500).send();
-        }
-      }
-    );
-  } catch (error) {
-    console.log("error: ", error);
-  }
-});
-
-
-app.get("/stocksdisplay", async (req, res) => {
-  try {
-    const result1 = await Stocks.find({sold: false}).exec(); // Using .exec() to execute the query
+    const result1 = await productmodel.find().exec(); // Using .exec() to execute the query
     // console.log(result);
     res.send({
-      message: "Got all Stocks successfully",
+      message: "Got all productmodel successfully",
       data: result1,
     });
   } catch (err) {
@@ -267,12 +350,14 @@ app.get("/stocksdisplay", async (req, res) => {
     });
   }
 });
-app.get("/stocksdisplaytrue", async (req, res) => {
+app.get("/listdisplaysubcategories/:name", async (req, res) => {
+  const category = req.params.name;
+console.log("cats",category);
   try {
-    const result1 = await Stocks.find({sold: true}).exec(); // Using .exec() to execute the query
+    const result1 = await productmodel.find({subcategory: category, isApproved: true }).exec(); // Using .exec() to execute the query
     // console.log(result);
     res.send({
-      message: "Got all Stocks successfully",
+      message: "Got all productmodel successfully",
       data: result1,
     });
   } catch (err) {
@@ -280,14 +365,14 @@ app.get("/stocksdisplaytrue", async (req, res) => {
     res.status(500).send({
       message: "Server error",
     });
-  } 
+  }
 });
-app.get("/stocksdisplayall", async (req, res) => {
+app.get("/listdisplaytrueactive", async (req, res) => {
   try {
-    const result1 = await Stocks.find().exec(); // Using .exec() to execute the query
+    const result1 = await productmodel.find({isApproved: true , Deactive: false}).exec(); // Using .exec() to execute the query
     // console.log(result);
     res.send({
-      message: "Got all Stocks successfully",
+      message: "Got all productmodel successfully",
       data: result1,
     });
   } catch (err) {
@@ -295,105 +380,363 @@ app.get("/stocksdisplayall", async (req, res) => {
     res.status(500).send({
       message: "Server error",
     });
-  } 
-});
-app.get("/api/v1/paginatpost", async (req, res) => {
-  try {
-    let query = Stocks.find({sold : false});
-
-    const page = parseInt(req.query.page) || 1;
-    const pageSize = parseInt(req.query.limit) || 12;
-    const skip = (page - 1) * pageSize;
-    const total = await Stocks.countDocuments();
-
-    const pages = Math.ceil(total / pageSize);
-
-    query = query.skip(skip).limit(pageSize);
-
-    if (page > pages) {
-      return res.status(404).json({
-        status: "fail",
-        message: "No page found",
-      });
-    }
-
-    const result = await query;
-    console.log(result);
-    res.status(200).json({
-      status: "success",
-      count: result.length,
-      page,
-      pages: pages,
-      data: result,
-    });
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({
-      status: "error",
-      message: "Server Error",
-    });
   }
 });
-app.delete("/stockdel/:id", async (req, res) => {
-  const id = req.params.id;
 
+app.get("/listdisplayfalse", async (req, res) => {
   try {
-    const deletedData = await Stocks.deleteOne({ _id: id });
-
-    if (deletedData.deletedCount !== 0) {
-      res.send({
-        message: "Stock has been deleted successfully",
-      });
-    } else {
-      res.status(404).send({
-        message: "No mentor found with this id: " + id,
-      });
-    }
-    console.log("id",id);
+    const result1 = await productmodel.find({isApproved: false}).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all disapproved product successfully",
+      data: result1,
+    });
   } catch (err) {
+    console.error(err);
     res.status(500).send({
       message: "Server error",
     });
   }
 });
-app.put("/edittedstock/:id", async (req,res) => {
-
-  const UserID = req.params.id;
-  const updatedUserData = req.body;
-
-  try{
-  const product = await Stocks.findByIdAndUpdate(UserID, updatedUserData, {
-    new: true, 
-  });
-  if (!product) {
-    return res.status(404).json({ message: 'User not found' });
+app.get("/listdisplayuser/:name", async (req, res) => {
+  const listernames = req.params.name;
+  console.log('listr', listernames)
+  try {
+    const result1 = await productmodel.find({listername: listernames}).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all lister product successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
   }
-
-  res.json(product);
-}
-catch {
-  res.status(500).json({ message: 'Server Error' });
-}
 });
-app.get("/singlestock/:id", async (req,res) => {     //chane name into id
+app.get("/listdisplayuserid/:id", async (req, res) => {
+  const listerid = req.params.id;
+  console.log('listr', listerid)
+  try {
+    const result1 = await productmodel.find({listerid: listerid}).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all lister product successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+
+//list main page listing headings
+
+app.get("/listhotproduct", async (req, res) => {
+
+  try {
+    const result1 = await productmodel.find({topSeller:true, Deactive: false, isApproved: true }).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all productmodel successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+app.get("/listfashionmain", async (req, res) => {
+
+  try {
+    const result1 = await productmodel.find({ category: "Fashion & Appreal", bestSeller: true, Deactive: false, isApproved: true }).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all productmodel successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+app.get("/listpropertymain", async (req, res) => {
+
+  try {
+    const result1 = await productmodel.find({ category: "Property", bestSeller: true, Deactive: false, isApproved: true }).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all productmodel successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+app.get("/listjobsmain", async (req, res) => {
+
+  try {
+    const result1 = await productmodel.find({ category: "Jobs", bestSeller: true, Deactive: false, isApproved: true }).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all productmodel successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+app.get("/listservicemain", async (req, res) => {
+
+  try {
+    const result1 = await productmodel.find({ category: "Services", bestSeller: true, Deactive: false, isApproved: true }).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all productmodel successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+app.get("/listfurnituremain", async (req, res) => {
+
+  try {
+    const result1 = await productmodel.find({ category: "Furniture", bestSeller: true, Deactive: false, isApproved: true }).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all productmodel successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+app.get("/listhealthmain", async (req, res) => {
+
+  try {
+    const result1 = await productmodel.find({ category: "Health", bestSeller: true, Deactive: false, isApproved: true }).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all productmodel successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+app.get("/listeventsmain", async (req, res) => {
+
+  try {
+    const result1 = await productmodel.find({ category: "Event Planner", bestSeller: true, Deactive: false, isApproved: true }).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all productmodel successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+app.get("/listbeautymain", async (req, res) => {
+
+  try {
+    const result1 = await productmodel.find({ category: "Beauty", bestSeller: true, Deactive: false, isApproved: true }).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all productmodel successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+
+//list category wise lists
+app.get("/fashionproducts", async (req, res) => {
+
+  try {
+    const result1 = await productmodel.find({ category: "Fashion & Appreal", Deactive: false, isApproved: true }).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all productmodel successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+app.get("/propertyproducts", async (req, res) => {
+
+  try {
+    const result1 = await productmodel.find({ category: "Property", Deactive: false, isApproved: true }).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all productmodel successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+app.get("/jobproducts", async (req, res) => {
+
+  try {
+    const result1 = await productmodel.find({ category: "Jobs", Deactive: false, isApproved: true }).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all productmodel successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+app.get("/servicesproducts", async (req, res) => {
+
+  try {
+    const result1 = await productmodel.find({ category: "Services", Deactive: false, isApproved: true }).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all productmodel successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+app.get("/furnitureproducts", async (req, res) => {
+
+  try {
+    const result1 = await productmodel.find({ category: "Furniture", Deactive: false, isApproved: true }).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all productmodel successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+app.get("/healthproducts", async (req, res) => {
+
+  try {
+    const result1 = await productmodel.find({ category: "Health", Deactive: false, isApproved: true }).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all productmodel successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+app.get("/eventproducts", async (req, res) => {
+
+  try {
+    const result1 = await productmodel.find({ category: "Event Planner", Deactive: false, isApproved: true }).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all productmodel successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+app.get("/beautyproducts", async (req, res) => {
+
+  try {
+    const result1 = await productmodel.find({ category: "Beauty", Deactive: false, isApproved: true }).exec(); // Using .exec() to execute the query
+    res.send({
+      message: "Got all productmodel successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+app.get("/singlelist/:id", async (req,res) => {     //chane name into id
 
   const productId = req.params.id;
   console.log('id',productId);
-  const product = await Stocks.findOne({_id:productId});
+  const product = await productmodel.findOne({_id:productId});
 
   res.send({message: "product found", Product : product})
 
 
 });
-app.get("/soldmark/:id", async (req, res) => {
+app.get("/singleuser/:id", async (req,res) => {     //chane name into id
+
+  const productId = req.params.id;
+  console.log('id',productId);
+  const product = await listers.findOne({_id:productId});
+
+  res.send({message: "user found", Product : product})
+
+
+});
+app.get("/activatelisting/:id", async (req, res) => {
   const id = req.params.id;
 
   try {
-    const FindData = await Stocks.findById({ _id: id });
+    const FindData = await productmodel.findById({ _id: id });
 
     if (FindData) {
      // FindData.isApproved = true;
-   await FindData.updateOne({ sold: true });
+   await FindData.updateOne({ Deactive: false });
       res.send({
         message: "Product has been set as sold successfully",
         data : FindData,
@@ -413,34 +756,255 @@ app.get("/soldmark/:id", async (req, res) => {
 
 });
 
-app.get("/api/search", async (req, res) => {
+app.put("/edittedlisting/:id", async (req,res) => {
+
+  const UserID = req.params.id;
+  const updatedUserData = req.body;
+
+  try{
+  const product = await productmodel.findByIdAndUpdate(UserID, updatedUserData, {
+    new: true, 
+  });
+  if (!product) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+
+  res.json(product);
+}
+catch {
+  res.status(500).json({ message: 'Server Error' });
+}
+});
+
+app.put("/editteduser/:id", async (req,res) => {
+
+  const UserID = req.params.id;
+  const updatedUserData = req.body;
+
+  try{
+  const product = await listers.findByIdAndUpdate(UserID, updatedUserData, {
+    new: true, 
+  });
+  if (!product) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+
+  res.json(product);
+}
+catch {
+  res.status(500).json({ message: 'Server Error' });
+}
+});
+app.get("/deactivatelisting/:id", async (req, res) => {
+  const id = req.params.id;
+
+  try {
+    const FindData = await productmodel.findById({ _id: id });
+
+    if (FindData) {
+     // FindData.isApproved = true;
+   await FindData.updateOne({ Deactive: true });
+      res.send({
+        message: "Product has been set as sold successfully",
+        data : FindData,
+      });
+    } else {
+      res.status(404).send({
+        message: "No Product found with this id: " + id,
+      });
+    }
+    console.log("data",FindData);
+    console.log("id",id);
+  } catch (err) {
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+
+});
+
+app.get("/approvelisting/:id", async (req, res) => {
+  const id = req.params.id;
+
+  try {
+    const FindData = await productmodel.findById({ _id: id });
+
+    if (FindData) {
+     // FindData.isApproved = true;
+   await FindData.updateOne({ isApproved: true });
+      res.send({
+        message: "Product has been sapproved successfully",
+        data : FindData,
+      });
+    } else {
+      res.status(404).send({
+        message: "No Product found with this id: " + id,
+      });
+    }
+    console.log("data",FindData);
+    console.log("id",id);
+  } catch (err) {
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+
+});
+app.get("/bestlistingactive/:id", async (req, res) => {
+  const id = req.params.id;
+
+  try {
+    const FindData = await productmodel.findById({ _id: id });
+
+    if (FindData) {
+     // FindData.isApproved = true;
+   await FindData.updateOne({ bestSeller: true });
+      res.send({
+        message: "Product has been set as sold successfully",
+        data : FindData,
+      });
+    } else {
+      res.status(404).send({
+        message: "No Product found with this id: " + id,
+      });
+    }
+    console.log("data",FindData);
+    console.log("id",id);
+  } catch (err) {
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+
+});
+app.get("/bestlisterdeactive/:id", async (req, res) => {
+  const id = req.params.id;
+
+  try {
+    const FindData = await productmodel.findById({ _id: id });
+
+    if (FindData) {
+     // FindData.isApproved = true;
+   await FindData.updateOne({ bestSeller: false });
+      res.send({
+        message: "Product has been set as sold successfully",
+        data : FindData,
+      });
+    } else {
+      res.status(404).send({
+        message: "No Product found with this id: " + id,
+      });
+    }
+    console.log("data",FindData);
+    console.log("id",id);
+  } catch (err) {
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+
+});
+
+app.get("/topsellingactive/:id", async (req, res) => {
+  const id = req.params.id;
+
+  try {
+    const FindData = await productmodel.findById({ _id: id });
+
+    if (FindData) {
+     // FindData.isApproved = true;
+   await FindData.updateOne({ topSeller: true });
+      res.send({
+        message: "Product has been set as sold successfully",
+        data : FindData,
+      });
+    } else {
+      res.status(404).send({
+        message: "No Product found with this id: " + id,
+      });
+    }
+    console.log("data",FindData);
+    console.log("id",id);
+  } catch (err) {
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+
+});
+app.get("/toplisterdeactive/:id", async (req, res) => {
+  const id = req.params.id;
+
+  try {
+    const FindData = await productmodel.findById({ _id: id });
+
+    if (FindData) {
+     // FindData.isApproved = true;
+   await FindData.updateOne({ topSeller: false });
+      res.send({
+        message: "Product has been set as sold successfully",
+        data : FindData,
+      });
+    } else {
+      res.status(404).send({
+        message: "No Product found with this id: " + id,
+      });
+    }
+    console.log("data",FindData);
+    console.log("id",id);
+  } catch (err) {
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+
+});
+app.delete("/deletelist/:id", async (req, res) => {
+  const id = req.params.id;
+
+  try {
+    const deletedData = await productmodel.deleteOne({ _id: id });
+
+    if (deletedData.deletedCount !== 0) {
+      res.send({
+        message: "Listing has been deleted successfully",
+      });
+    } else {
+      res.status(404).send({
+        message: "No mentor found with this id: " + id,
+      });
+    }
+    console.log("id",id);
+  } catch (err) {
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
+
+app.get("/api/searchlist", async (req, res) => {
   const searchParams = {};
       console.log("src",req.query)
 
   // Check if query parameters exist and add them to the search parameters
-  if (req.query.make) {
-    searchParams.make = new RegExp(req.query.make, "i");
+  if (req.query.location) {
+    searchParams.location = new RegExp(req.query.location, "i");
   }
-  if (req.query.model) {
-    searchParams.make = new RegExp(req.query.model, "i");
+  if (req.query.price) {
+    searchParams.price = new RegExp(req.query.price, "i");
   }
-  if (req.query.year) {
-    searchParams.year = new RegExp(req.query.year, "i");
+  if (req.query.productname) {
+    searchParams.productname = new RegExp(req.query.productname, "i");
   }
 
-  if (req.query.price) {
-    // Assuming price is a number, you might need to adjust the logic based on your data
-    searchParams.price = req.query.price;
-  }
 
   try {
-    const results = await Stocks.find(searchParams);
+    const results = await productmodel.find(searchParams);
     res.json(results);
   } catch (error) {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-
 // Start the server
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
