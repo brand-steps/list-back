@@ -35,7 +35,7 @@ app.get("/", (req, res) => {
 
 app.post("/listerregister", async (req, res) => {
   try {
-    const { firstname, lastname, email, phone ,postal,address,city,state, packagename, password } = req.body;
+    const { firstname, lastname, email, phone ,postal,address,city,state, password } = req.body;
 
     // Check if user with the given email already exists
     const existingCustomer = await listers.findOne({ email });
@@ -54,7 +54,6 @@ app.post("/listerregister", async (req, res) => {
       address,
       city,
       state,
-      packagename,
       password,
     });
 
@@ -173,7 +172,7 @@ app.get("/api/v1/listerprofile", (req, res) => {
     try {
       const user = await listers.findOne(
         { _id: _id },
-        "email password firstname lastname phone _id"
+        "email password firstname lastname phone _id packagename"
       ).exec();
       if (!user) {
         res.status(404).send({});
@@ -780,7 +779,8 @@ app.put("/editteduser/:id", async (req,res) => {
 
   const UserID = req.params.id;
   const updatedUserData = req.body;
-
+  const packagename = req.body.packagename;
+console.log("pac",packagename)
   try{
   const product = await listers.findByIdAndUpdate(UserID, updatedUserData, {
     new: true, 
@@ -1005,6 +1005,8 @@ app.get("/api/searchlist", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+
 // Start the server
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
