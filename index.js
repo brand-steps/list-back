@@ -128,6 +128,66 @@ app.post("/listerlogin", async (req, res) => {
     res.status(500).send({ message: "login failed, please try later" });
   }
 });
+app.post("/listerlogout", async (req, res) => {
+  try {
+    let body = req.body;
+    body.email = body.email.toLowerCase();
+
+
+
+    // check if user exists
+    const data = await listers.findOne(
+      { email: body.email },
+      "username email password"
+    );
+
+    if (data && body.password === data.password) {
+      // user found
+      console.log("User Successfully Logged In !");
+      console.log("data: ", data);
+
+      const token = jwt.sign(
+        {
+          _id: data._id,
+          email: data.email,
+          iat: 0,
+          exp: 0,
+        },
+        SECRET
+      );
+
+      console.log("token: ", token);
+
+      res.cookie("Token", token, {
+        maxAge: 0,
+        httpOnly: true,
+        sameSite: "none",
+        secure: true,
+      });
+
+      res.send({
+        message: "login successful",
+        profile: {
+          email: data.email,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          age: data.age,
+          _id: data._id,
+        },
+      });
+
+      return;
+    } else {
+      // user not found
+      console.log("user not found");
+      res.status(401).send({ message: "Incorrect email or password" });
+    }
+  } catch (error) {
+    console.log("error: ", error);
+    res.status(500).send({ message: "login failed, please try later" });
+  }
+});
+
 
 app.use("/api/v1", (req, res, next) => {
   console.log("req.cookies: ", req.cookies.Token);
@@ -1005,6 +1065,8 @@ app.get("/api/searchlist", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+//logout 
 
 
 // Start the server
