@@ -46,6 +46,19 @@ const productschema = new mongoose.Schema({
     imageUrl5: String,
     imageUrl6: String,
 
+    keyword1: String,
+    keyword2: String,
+    keyword3: String,
+    keyword4: String,
+    keyword5: String,
+    keyword6: String,
+    keyword7: String,
+    keyword8: String,
+    keyword9: String,
+    keyword10: String,
+    keyword11: String,
+    keyword12: String,
+    views: { type: Number, default: 0 },
 
     createdOn: { type: Date, default: Date.now },
 });

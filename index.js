@@ -361,7 +361,19 @@ app.post("/addlist", upload.array('images', 6), (req, res) => {
           listerid: body.listerid,
           description: body.description,
           price: body.price,
-         
+          keyword1: body.keyword1,
+          keyword2: body.keyword2,
+          keyword3: body.keyword3,
+          keyword4: body.keyword4,
+          keyword5: body.keyword5,
+          keyword6: body.keyword6,
+          keyword7: body.keyword7,
+          keyword8: body.keyword8,
+          keyword9: body.keyword9,
+          keyword10: body.keyword10,
+          keyword11: body.keyword11,
+          keyword12: body.keyword12,
+
           imageUrl1: imageUrls[0], // Save the first image URL
           imageUrl2: imageUrls[1], // Save the second image URL
           imageUrl3: imageUrls[2], // Save the third image URL
@@ -767,6 +779,22 @@ app.get("/beautyproducts", async (req, res) => {
     });
   }
 });
+app.get("/othersproducts", async (req, res) => {
+
+  try {
+    const result1 = await productmodel.find({ category: "Others", Deactive: false, isApproved: true }).exec(); // Using .exec() to execute the query
+    // console.log(result);
+    res.send({
+      message: "Got all others listings successfully",
+      data: result1,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      message: "Server error",
+    });
+  }
+});
 app.get("/singlelist/:id", async (req,res) => {     //chane name into id
 
   const productId = req.params.id;
@@ -777,6 +805,28 @@ app.get("/singlelist/:id", async (req,res) => {     //chane name into id
 
 
 });
+app.get("/productviews/:id", async (req, res) => {
+  const productId = req.params.id;
+
+  try {
+    const product = await productmodel.findOne({_id:productId});
+
+    if (!product) {
+      return res.status(404).json({ error: "Product not found" });
+    }
+
+    // Update the views count
+    product.views = (product.views || 0) + 1;
+    await product.save();
+
+    res.json({ message: "Product views updated successfully", views: product.views });
+  } catch (error) {
+    console.error("Error updating product views:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+
 app.get("/singleuser/:id", async (req,res) => {     //chane name into id
 
   const productId = req.params.id;
